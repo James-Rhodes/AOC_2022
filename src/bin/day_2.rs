@@ -22,7 +22,7 @@ fn main() {
             return calculate_my_score(my_move, opponent_move);
         })
         .sum::<i32>();
-
+    // Part Two Solution
     println!("Part Two: {:?}", result);
 }
 
