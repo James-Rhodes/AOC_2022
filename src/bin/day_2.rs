@@ -3,6 +3,8 @@ fn main() {
         .expect("The file could not be found or read");
 
     let game_moves = input_text.split("\r\n");
+    let game_moves_for_part_2 = game_moves.clone();
+
     let result: i32 = game_moves
         .map(|single_game_moves| {
             let (opponent_move, my_move) = single_game_moves.split_once(" ").unwrap();
@@ -11,13 +13,22 @@ fn main() {
         .sum::<i32>();
 
     // Part One Solution
-    println!("{:?}", result);
+    println!("Part One: {:?}", result);
+
+    let result: i32 = game_moves_for_part_2
+        .map(|single_game_moves| {
+            let (opponent_move, outcome) = single_game_moves.split_once(" ").unwrap();
+            let my_move = get_move_for_outcome(opponent_move, outcome);
+            return calculate_my_score(my_move, opponent_move);
+        })
+        .sum::<i32>();
+
+    println!("Part Two: {:?}", result);
 }
 
 fn calculate_my_score(my_move: &str, opponent_move: &str) -> i32 {
     let my_move_int = map_string_move_to_int(my_move);
     let opponent_move_int = map_string_move_to_int(opponent_move);
-    println!("{}", (my_move_int % 3) - (opponent_move_int % 3));
     let outcome = match (my_move_int % 3) - (opponent_move_int % 3) {
         -1 | 2 => 0, // Loss
         1 | -2 => 6, // Win
@@ -35,4 +46,27 @@ fn map_string_move_to_int(player_move: &str) -> i32 {
         "C" | "Z" => 3, // Scissors
         _ => -1000,     // Exhaustive Case
     };
+}
+
+fn get_move_for_outcome<'a>(opponent_move: &'a str, outcome: &'a str) -> &'a str {
+    if outcome == "X" {
+        // Lose
+        return match opponent_move {
+            "A" => "C",
+            "B" => "A",
+            "C" => "B",
+            _ => "",
+        };
+    } else if outcome == "Y" {
+        // Draw
+        return opponent_move;
+    } else {
+        // Win
+        return match opponent_move {
+            "A" => "B",
+            "B" => "C",
+            "C" => "A",
+            _ => "",
+        };
+    }
 }
