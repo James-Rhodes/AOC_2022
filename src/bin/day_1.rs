@@ -6,7 +6,7 @@ pub struct Elf {
 }
 fn main() {
     println!("Hello world");
-    let input_text = fs::read_to_string("./../../input/input.txt")
+    let input_text = fs::read_to_string("./../../inputs/input_day_1.txt")
         .expect("The file could not be read or found!");
 
     let mut all_elves: Vec<Elf> = Vec::new();
