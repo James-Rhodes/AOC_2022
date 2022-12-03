@@ -1,14 +1,17 @@
 use std::fs;
-mod elf;
-
+#[derive(Debug)]
+pub struct Elf {
+    pub snack_calories: Vec<i32>,
+    pub total_calories: i32,
+}
 fn main() {
     println!("Hello world");
     let input_text =
         fs::read_to_string("./../input/input.txt").expect("The file could not be read or found!");
 
-    let mut all_elves: Vec<elf::Elf> = Vec::new();
+    let mut all_elves: Vec<Elf> = Vec::new();
 
-    let mut current_elf: elf::Elf = elf::Elf {
+    let mut current_elf: Elf = Elf {
         snack_calories: Vec::new(),
         total_calories: 0,
     };
@@ -28,7 +31,7 @@ fn main() {
             }
 
             all_elves.push(current_elf);
-            current_elf = elf::Elf {
+            current_elf = Elf {
                 snack_calories: Vec::new(),
                 total_calories: 0,
             };
