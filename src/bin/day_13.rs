@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Debug};
+use std::cmp::Ordering;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum DataTypes {
