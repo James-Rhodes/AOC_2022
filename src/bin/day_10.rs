@@ -5,7 +5,7 @@ struct Instruction {
 }
 
 fn main() {
-    let instructions: Vec<Instruction> = std::fs::read_to_string("./../../inputs/input_day_10.txt")
+    let instructions: Vec<Instruction> = std::fs::read_to_string("./inputs/input_day_10.txt")
         .unwrap()
         .lines()
         .map(|line| match line.split_once(" ") {

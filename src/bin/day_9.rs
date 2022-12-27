@@ -125,7 +125,7 @@ impl Tail {
 }
 
 fn main() {
-    let movements: Vec<Movement> = std::fs::read_to_string("./../../inputs/input_day_9.txt")
+    let movements: Vec<Movement> = std::fs::read_to_string("./inputs/input_day_9.txt")
         .expect("Could not find file...")
         .lines()
         .map(|line| {

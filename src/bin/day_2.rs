@@ -1,5 +1,5 @@
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_2.txt")
+    let input_text = std::fs::read_to_string("./inputs/input_day_2.txt")
         .expect("The file could not be found or read");
 
     let game_moves = input_text.split("\r\n");

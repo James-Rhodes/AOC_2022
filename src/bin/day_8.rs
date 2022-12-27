@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_8.txt").unwrap();
+    let input_text = std::fs::read_to_string("./inputs/input_day_8.txt").unwrap();
 
     let tree_grid: Vec<Vec<u32>> = input_text
         .lines()

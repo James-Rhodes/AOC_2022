@@ -1,5 +1,5 @@
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_4.txt")
+    let input_text = std::fs::read_to_string("./inputs/input_day_4.txt")
         .expect("The file could not be found or read");
 
     let split_text: Vec<&str> = input_text

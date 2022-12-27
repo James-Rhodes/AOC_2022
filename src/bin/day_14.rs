@@ -5,7 +5,7 @@ enum Block {
     Sand,
 }
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_14.txt").unwrap();
+    let input_text = std::fs::read_to_string("./inputs/input_day_14.txt").unwrap();
     println!("Part One: {}", part_one(&input_text));
     println!("Part Two: {}", part_two(&input_text));
 }

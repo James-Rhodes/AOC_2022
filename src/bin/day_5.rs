@@ -1,5 +1,5 @@
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_5.txt").unwrap();
+    let input_text = std::fs::read_to_string("./inputs/input_day_5.txt").unwrap();
 
     let split_text: Vec<&str> = input_text.split("\r\n\r\n").collect();
     let container_config: Vec<&str> = split_text[0]

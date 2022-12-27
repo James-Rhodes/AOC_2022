@@ -1,7 +1,7 @@
 fn main() {
     println!("Hello world");
 
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_3.txt")
+    let input_text = std::fs::read_to_string("./inputs/input_day_3.txt")
         .expect("The file could not be read or found!");
     let mut sum: u32 = 0;
     for line in input_text.split("\n") {

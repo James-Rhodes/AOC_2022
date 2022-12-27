@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_6.txt").unwrap();
+    let input_text = std::fs::read_to_string("./inputs/input_day_6.txt").unwrap();
 
     let solution_1 = find_first_n_length_unique_window(4, &input_text);
     println!("Part One Solution: {}", solution_1);

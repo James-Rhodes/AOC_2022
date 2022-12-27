@@ -55,7 +55,7 @@ impl Directory {
     }
 }
 fn main() {
-    let input_text = std::fs::read_to_string("./../../inputs/input_day_7.txt").unwrap();
+    let input_text = std::fs::read_to_string("./inputs/input_day_7.txt").unwrap();
 
     // First load the file structure into a hella dodgey tree structure
     let root = Rc::new(RefCell::new(Directory::new()));

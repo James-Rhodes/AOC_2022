@@ -67,7 +67,7 @@ impl Monkey {
 }
 
 fn main() {
-    let mut monkeys: Vec<Monkey> = std::fs::read_to_string("./../../inputs/input_day_11.txt")
+    let mut monkeys: Vec<Monkey> = std::fs::read_to_string("./inputs/input_day_11.txt")
         .unwrap()
         .split("\r\n\r\n")
         .map(|monkey| parse_monkey(&monkey))

@@ -7,11 +7,11 @@ enum DataTypes {
 }
 
 fn main() {
-    let text_input = std::fs::read_to_string("./../../inputs/input_day_13.txt").unwrap();
+    let text_input = std::fs::read_to_string("./inputs/input_day_13.txt").unwrap();
 
     println!("Part One: {}", part_one(&text_input));
 
-    let mut text_input = std::fs::read_to_string("./../../inputs/input_day_13.txt").unwrap();
+    let mut text_input = std::fs::read_to_string("./inputs/input_day_13.txt").unwrap();
 
     text_input.push_str("\r\n\r\n[[2]]\r\n[[6]]"); // Adding the decoding strings
     println!("Part Two: {}", part_two(&text_input));
