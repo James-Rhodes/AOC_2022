@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashSet,HashMap, VecDeque};
 const ROCKS: &str = "####
 
 .#.
@@ -17,20 +17,46 @@ const ROCKS: &str = "####
 ##
 ##";
 
-#[derive(Default)]
+#[derive(PartialEq,Eq,Clone, Copy, Hash, Debug)]
+enum Block {
+    Air,
+    Rock
+}
+
+#[derive(PartialEq,Eq,Clone, Copy, Hash, Debug)]
+struct Row {
+    blocks: [Block; 7]
+}
+
+impl Row {
+    fn new() -> Self{
+        return Row {
+            blocks: [Block::Air;7]
+        }
+    }
+}
+
+const NUM_CACHED_ROWS: usize = 20;
 struct GameGrid {
     occupied_positions: HashSet<(i32, i32)>,
     current_highest: u64,
     current_moving_rock: Rock,
-    largest_heights: [i32; 7],
+    prev_row_states: VecDeque<Row>
 }
 
 impl GameGrid {
     fn new() -> Self {
-        let mut game_grid: GameGrid = GameGrid::default();
 
-        game_grid.largest_heights = [-1; 7];
-        return game_grid;
+        let mut window:VecDeque<Row>= VecDeque::new();
+        window.push_front(Row::new());
+
+        return GameGrid{
+            occupied_positions: HashSet::new(),
+            current_highest: 0,
+            current_moving_rock: Rock::default(),
+            prev_row_states: window
+        };
+
     }
     fn move_current_rock(&mut self, movements: &Vec<char>, current_movement: &mut usize) {
         while !self.current_moving_rock.stopped {
@@ -46,28 +72,41 @@ impl GameGrid {
             .for_each(|coord| {
                 self.occupied_positions.insert(*coord);
 
+                self.update_prev_row_states(&coord);
                 if coord.1 + 1 > self.current_highest as i32 {
                     self.current_highest = coord.1 as u64 + 1;
                 }
 
-                if self.largest_heights[coord.0 as usize] < coord.1 {
-                    self.largest_heights[coord.0 as usize] = coord.1;
-                }
             });
-
-        let min_height = self
-            .largest_heights
-            .iter()
-            // .filter(|num| **num >= 0)
-            .min()
-            .unwrap();
-
-        self.largest_heights
-            .iter()
-            .enumerate()
-            .for_each(|(i, val)| self.relative_heights[i] = val - *min_height);
     }
 
+    fn update_prev_row_states(&mut self, coord: &(i32,i32)) {
+
+        let (x,y) = *coord;
+        let mut relative_height = i32::max(self.current_highest as i32 - 1, 0) - y; // If largest = 20 and y is 17 this will give the index of 3 which is the row the row should be updated on
+
+        if relative_height < 0 {
+            // Push on to the vecdeque/stack
+
+            while relative_height < 0 {
+                self.prev_row_states.push_front(Row::new());
+
+                if self.prev_row_states.len() > NUM_CACHED_ROWS {
+                    // The stack has too many items so remove one
+                    self.prev_row_states.pop_back();
+                }
+
+                relative_height += 1;
+            }
+            self.prev_row_states[0].blocks[x as usize] = Block::Rock;
+        }
+        else if relative_height < NUM_CACHED_ROWS as i32 {
+            self.prev_row_states[relative_height as usize].blocks[x as usize] = Block::Rock;
+        } 
+
+    }
+
+    #[allow(dead_code)]
     fn print_grid(&self) {
         for current_layer in (0..self.current_highest).rev() {
             let mut grid_layer = ".......".to_string();
@@ -81,7 +120,8 @@ impl GameGrid {
                 }
             }
 
-            println!("{current_layer:>4} - {}", grid_layer);
+            let display_layer = current_layer + 1;
+            println!("{display_layer:>4} - {}", grid_layer);
         }
     }
 }
@@ -141,62 +181,64 @@ fn main() {
     let input_text = std::fs::read_to_string("./inputs/input_day_17.txt").unwrap();
 
     println!("Part One: {}", part_one(&input_text, 2022));
+    println!("Part Two: {}", part_two(&input_text));
 }
 
 fn part_one(input_text: &str, num_iterations: u64) -> u64 {
+
     let base_rocks = parse_rocks(ROCKS);
     let movements = input_text.chars().collect::<Vec<char>>();
+
+
+    let (rocks_when_cycle_starts, rocks_when_cycle_ends) = find_cycle(
+        &base_rocks,
+        &movements,
+    );
 
     let mut game_grid = GameGrid::new();
 
     let mut movement_index = 0;
     let mut rock_index = 0;
 
-    let (num_rocks_when_cycle_occurs, height_when_cycle_occurs) = find_cycle(
-        &mut game_grid,
-        &base_rocks,
-        &mut rock_index,
-        &movements,
-        &mut movement_index,
-    );
+    
+    let num_rocks_per_cycle = rocks_when_cycle_ends - rocks_when_cycle_starts;
+    let mut height_before_cycle = 0;
+    let mut height_after_cycle = 0;
+    let mut cycle_height = 0;
 
-    println!(
-        "{}, {}",
-        num_rocks_when_cycle_occurs, height_when_cycle_occurs
-    );
+    let cycles_that_fit_in_num_iterations = (num_iterations - rocks_when_cycle_starts) / num_rocks_per_cycle;
+    let total_rocks_to_simulate = ((num_iterations - rocks_when_cycle_starts) % num_rocks_per_cycle) + rocks_when_cycle_ends;
+    
 
-    let cycles_in_num_iterations = num_iterations / num_rocks_when_cycle_occurs;
-    let remaining_rocks_after_cycles = num_iterations % num_rocks_when_cycle_occurs;
+    for rock_num in 1..= total_rocks_to_simulate {
 
-    let current_height: u64 = cycles_in_num_iterations * height_when_cycle_occurs;
-
-    println!("cycles in num_iterations: {}, remaining_rocks: {}, current_height: {}, current_height_grid: {}", cycles_in_num_iterations,remaining_rocks_after_cycles,current_height, game_grid.current_highest);
-    for _ in 0..remaining_rocks_after_cycles {
         let mut current_rock = base_rocks[rock_index].clone();
         current_rock.pos.1 = game_grid.current_highest as i32 + 3;
 
         game_grid.current_moving_rock = current_rock;
         game_grid.move_current_rock(&movements, &mut movement_index);
 
+        if rock_num == rocks_when_cycle_starts {
+            height_before_cycle = game_grid.current_highest;
+        }
+        else if rock_num == rocks_when_cycle_ends {
+            height_after_cycle = game_grid.current_highest;
+            cycle_height = height_after_cycle - height_before_cycle;
+        }
+
         rock_index = (rock_index + 1) % base_rocks.len();
     }
 
-    game_grid.print_grid();
 
-    // println!("Hello?");
-    // println!(
-    //     "relative_heights: {:?}\nmax_heights: {:?}",
-    //     game_grid.relative_heights, game_grid.largest_heights
-    // );
+    
+    // Height is going to be:
+    // Height_when_cycle_starts + (height diff of cycle) * (num_cycles that fit in (num_iterations - rocks_when_cycle_starts)) + height_of_remaining_rocks
 
-    println!(
-        "Current_Height: {}, current_highest_grid: {}, height_when_cycle: {}, diff: {}",
-        current_height,
-        game_grid.current_highest,
-        height_when_cycle_occurs,
-        game_grid.current_highest - height_when_cycle_occurs
-    );
-    return current_height + (game_grid.current_highest - height_when_cycle_occurs);
+    let height_of_all_cycles =  cycle_height  * cycles_that_fit_in_num_iterations;
+    let height_of_remaining_rocks = game_grid.current_highest - height_after_cycle;
+    let total_height = height_before_cycle + height_of_all_cycles + height_of_remaining_rocks;
+
+    return total_height;
 }
 
 fn part_two(input_text: &str) -> u64 {
@@ -218,7 +260,7 @@ fn parse_rocks(input: &str) -> Vec<Rock> {
                             .enumerate()
                             .map(|(j, block)| {
                                 return match block {
-                                    '.' => (99, 99), // Some large number I know cannot exist sop I can filter next
+                                    '.' => (99, 99), // Some large number I know cannot exist so I can filter next
                                     '#' => (j as i32, i as i32),
                                     _ => (99, 99),
                                 };
@@ -250,50 +292,44 @@ fn parse_rocks(input: &str) -> Vec<Rock> {
 }
 
 fn find_cycle(
-    game_grid: &mut GameGrid,
     base_rocks: &Vec<Rock>,
-    rock_index: &mut usize,
     movements: &Vec<char>,
-    movement_index: &mut usize,
 ) -> (u64, u64) {
-    let mut state_cache: HashSet<(VecDeque<[i32; 7]>, usize, usize)> = HashSet::new();
 
+    let mut game_grid = GameGrid::new();
+    let mut rock_index = 0;
+    let mut movement_index = 0;
+    let mut state_cache: HashMap<(VecDeque<Row>, usize, usize), u64> = HashMap::new();
+    let mut prev_height = 0;
     let mut num_rocks = 0;
-    const NUM_ROWS_TO_INDICATE_CYCLE: u64 = 20;
-    let mut prev_relative_heights: VecDeque<[i32; 7]> = VecDeque::new();
-    let mut prev_max_height: VecDeque<u64> = VecDeque::new();
     loop {
-        let mut current_rock = base_rocks[*rock_index].clone();
+        let mut current_rock = base_rocks[rock_index].clone();
         current_rock.pos.1 = game_grid.current_highest as i32 + 3;
 
         game_grid.current_moving_rock = current_rock;
-        game_grid.move_current_rock(&movements, movement_index);
+        game_grid.move_current_rock(&movements, &mut movement_index);
 
-        prev_max_height.push_front(game_grid.current_highest);
-        if num_rocks < NUM_ROWS_TO_INDICATE_CYCLE {
-            prev_relative_heights.push_front(game_grid.relative_heights.clone());
-        } else {
-            prev_relative_heights.push_front(game_grid.relative_heights.clone());
-            prev_relative_heights.pop_back();
-            let current_state = (prev_relative_heights.clone(), *movement_index, *rock_index);
+        // Do the actual caching in here
 
-            if !state_cache.insert(current_state.clone()) {
-                println!("Cache match on: {:?}", current_state);
-                println!("Cache contents: {:?}", state_cache);
-                break;
-            }
+        let current_state = (game_grid.prev_row_states.clone(), movement_index, rock_index);
+        if state_cache.contains_key(&current_state) {
+            let cycle_start = *state_cache.get(&current_state).unwrap();
+            let cycle_end = num_rocks;
+
+            return (
+                cycle_start,
+                cycle_end
+            );
+        } else if game_grid.current_highest > prev_height && num_rocks > NUM_CACHED_ROWS as u64{
+            state_cache.insert(current_state, num_rocks);
         }
-        *rock_index = (*rock_index + 1) % base_rocks.len();
+        
+        rock_index = (rock_index + 1) % base_rocks.len();
         num_rocks += 1;
+        prev_height = game_grid.current_highest;
+
     }
-
-    println!("{:?}", prev_max_height);
-    return (
-        num_rocks - NUM_ROWS_TO_INDICATE_CYCLE - 1,
-        prev_max_height[NUM_ROWS_TO_INDICATE_CYCLE as usize + 1],
-    );
-}
-
+} 
 #[test]
 fn part_one_test() {
     let input_text = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
@@ -301,7 +337,6 @@ fn part_one_test() {
     assert_eq!(3068, part_one(input_text, 2022));
     // assert_eq!(3068, part_one(input_text, 3));
 }
-#[ignore]
 #[test]
 fn part_two_test() {
     let input_text = ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>";
