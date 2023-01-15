@@ -16,18 +16,13 @@ struct Blueprint {
     robot_costs: HashMap<&'static str, Vec<ResourceRequirements>>
 }
 
-// #[derive(Debug)]
-struct Inventory {
+#[derive(Clone)]
+struct State{
     resources: HashMap<&'static str, u32>,
     robots: HashMap<&'static str, u32>,
-    strategies: HashMap<&'static str, fn(&HashMap<&'static str, u32>,&HashMap<&'static str, u32>, &HashMap<&'static str, u32>)->bool>,
-    blueprint: Blueprint,
-    max_resource_requirements: HashMap<&'static str, u32>
 }
-
-impl Inventory{
-    fn new(blueprint: &Blueprint) -> Self {
-
+impl State {
+    fn new() -> Self {
         let mut resources:HashMap<&'static str, u32> = HashMap::new();
         for resource in RESOURCE_TYPES.iter() {
             resources.insert(resource, 0);
@@ -36,43 +31,51 @@ impl Inventory{
         for robot_type in ROBOT_TYPES.iter() {
             robots.insert(robot_type, 0);
         }
-
-        let mut strategies: HashMap<&'static str, fn(&HashMap<&'static str, u32>,&HashMap<&'static str, u32>, &HashMap<&'static str, u32>)->bool> = HashMap::new();
-        strategies.insert("geode_robot", |_,_,_| {
-            
-            return true; // Always buy geode robots if we can afford them
-        });
-
-        strategies.insert("obsidian_robot", |robots,resources,max_resource_requirements| {
-            // Only purchase if a geode robot isn't possible in the next turn (kind of two turns
-            // because this turns resources haven't accumulated yet)
-            let num_obsidian_robots = *robots.get("obsidian_robot").unwrap(); 
-            let obsidian_at_capacity = num_obsidian_robots >= *max_resource_requirements.get("obsidian").unwrap();
-            let will_be_able_to_afford_geode_next_minute = resources.get("obsidian").unwrap() + 2 * num_obsidian_robots >= *max_resource_requirements.get("obsidian").unwrap();
-            let has_more_obsidian_robots_than_clay = robots.get("obsidian_robot").unwrap() >= robots.get("clay_robot").unwrap();
-            if !obsidian_at_capacity && !will_be_able_to_afford_geode_next_minute && !has_more_obsidian_robots_than_clay {
-                return true; // Always buy geode robots if we can afford them
-             }
-            return false;
-        });
-
-        strategies.insert("clay_robot", |robots,resources,max_resource_requirements| {
-            let num_clay_robots = *robots.get("clay_robot").unwrap(); 
-            let clay_at_capacity = num_clay_robots >= *max_resource_requirements.get("clay").unwrap();
-            let will_be_able_to_afford_obsidian_next_minute = resources.get("clay").unwrap() + 2 * num_clay_robots >= *max_resource_requirements.get("clay").unwrap();
-            if !clay_at_capacity && !will_be_able_to_afford_obsidian_next_minute {
-                return true; // Always buy geode robots if we can afford them
-             }
-            return false;
-        });
-        strategies.insert("ore_robot", |robots,_,max_resource_requirements| {
-            if *robots.get("ore_robot").unwrap() < *max_resource_requirements.get("ore").unwrap() {
-                return true; // Always buy geode robots if we can afford them
-             }
-            return false;
-        });
-
         robots.insert("ore_robot", 1); // always start with one ore robot
+                                       //
+        return State{ resources, robots}; 
+
+    }
+
+    fn get_quality(&self, id:u32) -> u32 {
+        return self.resources.get("geode").unwrap() * id;
+    }
+
+    fn increase_resources(&mut self) {
+        for (resource, robot) in RESOURCE_TYPES.iter().zip(ROBOT_TYPES.iter()){
+            let count = self.resources.entry(resource).or_insert(0);
+            let num_robots = self.robots.get(robot).expect("All robots should exist inside the inventory.robots hashmap"); // We know that the value exists
+            *count += num_robots;
+            //println!("{} {} collecting robot collected {} {}. You now have {} {}", num_robots, resource, num_robots, resource, *count, resource);
+        }
+    }
+
+    fn build_robot(&mut self, robot_type: Option<&'static str>, robot_costs:&HashMap<&'static str, Vec<ResourceRequirements>>) {
+       match robot_type {
+            Some(robot_type) => {
+
+                for requirement in robot_costs.get(robot_type).expect("The robot type must exist") {
+                    let num_resource = self.resources.entry(requirement.resource).or_insert(0);
+                    *num_resource -= requirement.cost;
+                }
+
+                let robot_count = self.robots.entry(robot_type).or_insert(0);
+                *robot_count += 1;
+                //println!("Purchased: {}, with {:?}", robot_type, robot_costs.get(robot_type).expect("The robot type must exist"));
+            },
+            None => ()
+       } 
+    }
+}
+
+#[derive(Clone)]
+struct Simulation<'a> {
+    blueprint: &'a Blueprint,
+    max_resource_requirements: HashMap<&'static str, u32>
+}
+
+impl<'a> Simulation<'a>{
+    fn new(blueprint: &'a Blueprint) -> Self {
 
         // create the hashmap containing the max amount of each resource that is required to build
         // a robot
@@ -85,52 +88,62 @@ impl Inventory{
                 }
             } 
         }
-        max_resource_requirements.insert("geode",0);
+        max_resource_requirements.insert("geode",u32::MAX);//geodes don't have a max as we always
+                                                           //want to buy them
 
-        return Inventory {resources, robots, blueprint:blueprint.clone(), strategies, max_resource_requirements};
+        return Simulation {blueprint:&blueprint, max_resource_requirements};
     }
 
-    fn update(&mut self) {
+    fn run(&mut self,state: &State, robot_built_last_round: Option<&'static str>, time_remaining: u32, best_quality:&mut u32) {
 
-        let possible_new_robot = self.try_build_robots();
-
-        self.increase_resources();
-
-        // If there is a robot that can be built from try_build_robot then finish building it
-        match possible_new_robot{
-            Some(new_robot) => self.build_robot(new_robot),
-            None => ()
-        };
-    }
-
-    fn get_quality(&self, id:u32) -> u32 {
-        return self.resources.get("geode").unwrap() * id;
-    }
-
-    fn increase_resources(&mut self) {
-        for (resource, robot) in RESOURCE_TYPES.iter().zip(ROBOT_TYPES.iter()){
-            let count = self.resources.entry(resource).or_insert(0);
-            let num_robots = self.robots.get(robot).expect("All robots should exist inside the inventory.robots hashmap"); // We know that the value exists
-            *count += num_robots;
-            println!("{} {} collecting robot collected {} {}. You now have {} {}", num_robots, resource, num_robots, resource, *count, resource);
-        }
-    }
-
-    fn try_build_robots(&mut self) -> Option<&'static str>{
-        // Reversed so that geode gets checked first. This is because we always want to get a geode robot if we can afford it
-        for robot in ROBOT_TYPES.iter().rev() {
-            if  self.can_afford_robot(robot) && self.strategies.get(robot).unwrap()(&self.robots, &self.resources, &self.max_resource_requirements){
-                return Some(robot);
+        let mut state = state.clone();
+        
+        if time_remaining == 0 {
+            // simulation for this branch is done
+            
+            let current_branch_quality = state.get_quality(self.blueprint.id);
+            if *best_quality < current_branch_quality {
+                *best_quality = current_branch_quality;
             }
 
+            return;
+
         }
-        return None;
+
+        state.build_robot(robot_built_last_round, &self.blueprint.robot_costs);
+        let branches = self.try_build_robots(&state);
+
+        state.increase_resources();
+
+        //println!("At minute: {}, current best: {}",time_remaining, *best_quality);
+        //println!("branches: {:?}", branches);
+        for possible_robot in branches {
+            self.run(&state,possible_robot, time_remaining - 1, best_quality);
+        }
+
     }
 
-    fn can_afford_robot(&self, robot_type: &str) -> bool {
+    fn try_build_robots(&self, state:&State) -> Vec<Option<&'static str>> {
+        let mut possible_robot_decisions:Vec<Option<&'static str>> = vec![];
+        // Reversed so that geode gets checked first. This is because we always want to get a geode robot if we can afford it
+        for (robot,resource) in ROBOT_TYPES.iter().zip(RESOURCE_TYPES).rev() {
+            if  self.can_afford_robot(robot,state) && self.should_buy_robot(&state.robots, robot, resource) {
+
+                possible_robot_decisions.push(Some(*robot));
+                if *robot == "geode_robot" {
+                    return possible_robot_decisions;
+                }
+            }
+        }
+
+        possible_robot_decisions.push(None); // the case where we just don't buy any robots
+        return possible_robot_decisions;
+    }
+
+    fn can_afford_robot(&self, robot_type: &str, state:&State) -> bool {
 
         for requirement in self.blueprint.robot_costs.get(robot_type).expect("The robot type must exist") {
-            let num_resource = self.resources.get(requirement.resource).expect("The resource must exist");
+            let num_resource = state.resources.get(requirement.resource).expect("The resource must exist");
             
             if *num_resource < requirement.cost {
                 return false;
@@ -140,25 +153,20 @@ impl Inventory{
         return true;
     }
 
-    fn build_robot(&mut self, robot_type: &'static str) {
-        
-        for requirement in self.blueprint.robot_costs.get(robot_type).expect("The robot type must exist") {
-            println!("Current number of {} is : {}", requirement.resource, self.resources.get(requirement.resource).unwrap()); 
-            let num_resource = self.resources.entry(requirement.resource).or_insert(0);
-            *num_resource -= requirement.cost;
-            println!("New number of {} is : {}", requirement.resource, self.resources.get(requirement.resource).unwrap()); 
+    fn should_buy_robot(&self, robots:&HashMap<&'static str, u32>,robot_type: &str, resource: &str) -> bool {
 
-
-            //println!("Resource: {}, current amount: {}", requirement.resource, *num_resource);
-
-        }
-        
-        let robot_count = self.robots.entry(robot_type).or_insert(0);
-        *robot_count += 1;
-        println!("Purchased: {}, with {:?}", robot_type, self.blueprint.robot_costs.get(robot_type).expect("The robot type must exist"));
+            let num_robots = *robots.get(robot_type).unwrap(); 
+            let at_capacity = num_robots >= *self.max_resource_requirements.get(resource).unwrap();
+            if !at_capacity {
+                return true; 
+             }
+            return false;
     }
 
+
 }
+
+
 
 fn parse_blueprint(input: &str) -> IResult<&str, Blueprint> {
 
@@ -201,7 +209,7 @@ fn main() {
     println!("Part One: {}", part_one(&input_text,24));
 }
 
-fn part_one(input_text: &str, num_minutes: usize) -> u32 {
+fn part_one(input_text: &str, num_minutes: u32) -> u32 {
 
     let blueprints: Vec<Blueprint> = input_text.lines().map(|line| parse_blueprint(line).expect("Failed to parse blueprint").1).collect();
 
@@ -211,18 +219,14 @@ fn part_one(input_text: &str, num_minutes: usize) -> u32 {
     return total_quality_levels;
 }
 
-fn process_blueprint(blueprint: &Blueprint, num_minutes: usize) -> u32 {
+fn process_blueprint(blueprint: &Blueprint, num_minutes: u32) -> u32 {
 
-    let mut inventory = Inventory::new(blueprint);
-    
-    for i in 1..=num_minutes {
-        println!("Minute {}", i);
-        inventory.update();
-        println!("{:?}", inventory.robots);
-        println!("{:?}", inventory.resources);
-        println!("\n\n");
-    }
-    return inventory.get_quality(blueprint.id);
+    let mut simulation = Simulation::new(blueprint);
+    let state = State::new();
+    let mut best_quality = 0;
+
+    simulation.run(&state,None,num_minutes,&mut best_quality);
+    return best_quality;
 }
 
 
@@ -247,6 +251,7 @@ fn test_first_blueprint(){
 #[test]
 fn test_second_blueprint(){
 
+    dbg!("Hello this terst is starting");
     let input_text = "Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian.";
 
     assert_eq!(part_one(input_text,24), 24);
