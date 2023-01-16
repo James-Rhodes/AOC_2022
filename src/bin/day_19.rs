@@ -37,8 +37,8 @@ impl State {
 
     }
 
-    fn get_quality(&self, id:u32) -> u32 {
-        return self.resources.get("geode").unwrap() * id;
+    fn get_num_geodes(&self) -> u32 {
+        return *self.resources.get("geode").unwrap();
     }
 
     fn increase_resources(&mut self) {
@@ -94,16 +94,16 @@ impl<'a> Simulation<'a>{
         return Simulation {blueprint:&blueprint, max_resource_requirements};
     }
 
-    fn run(&mut self,state: &State, robot_built_last_round: Option<&'static str>, time_remaining: u32, best_quality:&mut u32) {
+    fn run(&mut self,state: &State, robot_built_last_round: Option<&'static str>, time_remaining: u32, most_num_geodes:&mut u32) {
 
         let mut state = state.clone();
         
         if time_remaining == 0 {
             // simulation for this branch is done
             
-            let current_branch_quality = state.get_quality(self.blueprint.id);
-            if *best_quality < current_branch_quality {
-                *best_quality = current_branch_quality;
+            let current_branch_num_geodes = state.get_num_geodes();
+            if *most_num_geodes < current_branch_num_geodes {
+                *most_num_geodes = current_branch_num_geodes;
             }
 
             return;
@@ -115,12 +115,43 @@ impl<'a> Simulation<'a>{
 
         state.increase_resources();
 
-        //println!("At minute: {}, current best: {}",time_remaining, *best_quality);
-        //println!("branches: {:?}", branches);
         for possible_robot in branches {
-            self.run(&state,possible_robot, time_remaining - 1, best_quality);
+            // Only run if the maximum possible geodes that can be built from the current state is
+            // greater than the current most_num_geodes (branch and bound)
+
+            if self.get_max_bound(&state, possible_robot, time_remaining -1) > *most_num_geodes {
+                self.run(&state,possible_robot, time_remaining - 1, most_num_geodes);
+            }
+    }
+
+    }
+
+    fn get_max_bound(&self, state:&State,robot_decision_branch: Option<&'static str>, time_remaining:u32) -> u32 {
+        // Assume that we either build a geode robot (have enough obsidian) or we build obsidian
+        let mut state = state.clone();
+        state.build_robot(robot_decision_branch, &self.blueprint.robot_costs);
+        let geode_obsidian_cost = self.blueprint.robot_costs.get("geode_robot").unwrap().iter().find(|el| el.resource=="obsidian").unwrap().cost;
+
+
+        for _ in (0..time_remaining).rev() {
+            state.increase_resources();
+
+            if state.resources.get("obsidian").unwrap() >= &geode_obsidian_cost {
+                let num_resource = state.resources.entry("obsidian").or_insert(0);
+                *num_resource -= geode_obsidian_cost;
+                
+
+                let robot_count = state.robots.entry("geode_robot").or_insert(0);
+                *robot_count += 1;
+            }
+            else {
+                let robot_count = state.robots.entry("obsidian_robot").or_insert(0);
+                *robot_count += 1;
+            }
+
         }
 
+        return state.get_num_geodes();
     }
 
     fn try_build_robots(&self, state:&State) -> Vec<Option<&'static str>> {
@@ -166,8 +197,6 @@ impl<'a> Simulation<'a>{
 
 }
 
-
-
 fn parse_blueprint(input: &str) -> IResult<&str, Blueprint> {
 
     let mut robot_costs: HashMap<&'static str, Vec<ResourceRequirements>> = HashMap::new();
@@ -203,10 +232,11 @@ fn parse_blueprint(input: &str) -> IResult<&str, Blueprint> {
 
 fn main() {
     println!("Hello Day 19");    
-
     let input_text = std::fs::read_to_string("./inputs/input_day_19.txt").unwrap();
 
     println!("Part One: {}", part_one(&input_text,24));
+    println!("Part Two: {}", part_two(&input_text,32));
+
 }
 
 fn part_one(input_text: &str, num_minutes: u32) -> u32 {
@@ -214,19 +244,29 @@ fn part_one(input_text: &str, num_minutes: u32) -> u32 {
     let blueprints: Vec<Blueprint> = input_text.lines().map(|line| parse_blueprint(line).expect("Failed to parse blueprint").1).collect();
 
     let mut total_quality_levels = 0;
-    blueprints.iter().for_each(|blueprint| total_quality_levels += process_blueprint(&blueprint, num_minutes));
+    blueprints.iter().for_each(|blueprint| total_quality_levels += blueprint.id * process_blueprint(&blueprint, num_minutes));
 
     return total_quality_levels;
+}
+
+fn part_two(input_text: &str, num_minutes: u32) -> u32 {
+
+    let blueprints: Vec<Blueprint> = input_text.lines().map(|line| parse_blueprint(line).expect("Failed to parse blueprint").1).collect();
+
+    let mut product_num_geodes = 1;
+    blueprints.iter().take(3).for_each(|blueprint| product_num_geodes *= process_blueprint(&blueprint, num_minutes));
+
+    return product_num_geodes;
 }
 
 fn process_blueprint(blueprint: &Blueprint, num_minutes: u32) -> u32 {
 
     let mut simulation = Simulation::new(blueprint);
     let state = State::new();
-    let mut best_quality = 0;
+    let mut most_num_geodes = 0;
 
-    simulation.run(&state,None,num_minutes,&mut best_quality);
-    return best_quality;
+    simulation.run(&state,None,num_minutes,&mut most_num_geodes);
+    return most_num_geodes;
 }
 
 
@@ -239,6 +279,14 @@ Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsid
     assert_eq!(part_one(input_text,24), 33);
 }
 
+#[test]
+fn test_part_two(){
+    let input_text = "Blueprint 1: Each ore robot costs 4 ore. Each clay robot costs 2 ore. Each obsidian robot costs 3 ore and 14 clay. Each geode robot costs 2 ore and 7 obsidian.
+Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian.";
+
+
+    assert_eq!(part_two(input_text,32), 56*62);
+}
 
 #[test]
 fn test_first_blueprint(){
